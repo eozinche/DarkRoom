@@ -1,0 +1,600 @@
+<html>
+<head>
+
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript" src="webgl-utils.js"></script>
+<script type="text/javascript" src="gl-matrix-min.js"></script>
+<script type="text/javascriszpt" src="Noodlebox3D_.js"></script>
+<script type="text/javascriszpt" src="Noodlebox3D.js"></script>
+<script type="text/javascript" src="http://ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+        
+<script id="offset-particle-shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec2 aVertexUV;
+
+    uniform sampler2D uDifferenceSampler;
+    uniform sampler2D uTextureSampler;
+    uniform sampler2D uOffsetSampler;
+    uniform mat4 ufMatrix;
+
+    varying vec2 vTextureCoord;
+    varying float vBlend;
+
+    void main(void) {
+
+        float b = texture2D(uDifferenceSampler, aVertexUV).x;
+
+        vBlend = b;
+
+        vec4 disp = vec4(aVertexPosition,1.0)+(texture2D(uOffsetSampler,aVertexUV)-vec4(0.5,0.3,0.5,0.0))*4.00*pow(1.0-b,3.0);
+
+        disp.w = 1.0;
+        gl_Position = ufMatrix * disp ;
+        
+        gl_PointSize = 1.0; // CRITICAL!
+
+        vTextureCoord = aVertexUV; // send to fragment
+
+    }
+</script>
+
+<script id="offset-particle-shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+    varying float vBlend;
+
+    uniform sampler2D uDifferenceSampler;
+    uniform sampler2D uTextureSampler;
+
+    uniform sampler2D uOffsetSampler;
+    void main(void) {
+
+        if (vBlend==0.0) discard;
+
+        vec4 c = texture2D(uTextureSampler, vTextureCoord);
+
+        float b = (c.x+c.y+c.z)/3.00;
+
+        b = b + sin(b*18.849555921538759430775860299677)*sin(b*1.5707963267948966192313216916398);
+        b = b * vBlend;
+
+        gl_FragColor = vec4(b,b,b,1.0);
+
+    }
+</script>
+
+<script id="texture-difference-shader-vs" type="x-shader/x-vertex">
+    attribute vec2 aVertexPosition;
+    attribute vec2 aVertexUV;
+
+    varying vec2 vTextureCoord;
+
+    void main(void) {
+        gl_Position = vec4(aVertexPosition, 1.0, 1.0) ;
+        vTextureCoord = aVertexUV; // send to fragment
+    }
+</script>
+
+<script id="texture-difference-shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler1;
+    uniform sampler2D uSampler2;
+
+    uniform vec2 uColorTransform;
+
+    void main(void) {
+        vec4 c = abs(texture2D(uSampler1, vTextureCoord)-texture2D(uSampler2, vTextureCoord));
+        float b = (max(max(c.x,c.y),c.z)+uColorTransform.x)*uColorTransform.y;
+        gl_FragColor = vec4(b,b,b,b);
+    }
+</script>
+
+<script id="flat-fill-shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+
+    void main(void) {
+        gl_Position = vec4(aVertexPosition, 1.0) ;
+    }
+</script>
+
+<script id="flat-fill-shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    uniform vec4 uColor;
+
+    void main(void) {
+        gl_FragColor = uColor;
+    }
+</script>
+
+<script id="texture-fill-shader-vs" type="x-shader/x-vertex">
+    attribute vec2 aVertexPosition;
+    attribute vec2 aVertexUV;
+
+    varying vec2 vTextureCoord;
+
+    void main(void) {
+        gl_Position = vec4(aVertexPosition, 1.0, 1.0) ;
+        vTextureCoord = aVertexUV;
+    }
+</script>
+
+<script id="texture-fill-shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+
+    void main(void) {
+        gl_FragColor = texture2D(uSampler,vTextureCoord);
+    }
+</script>
+
+<script id="blur-shader-vs" type="x-shader/x-vertex">
+    attribute vec2 aVertexPosition;
+    attribute vec2 aVertexUV;
+
+    varying vec2 vTextureCoord;
+
+    void main(void) {
+        gl_Position = vec4(aVertexPosition, 1.0, 1.0) ;
+        vTextureCoord = aVertexUV;
+    }
+</script>
+
+<script id="circular-blur-shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+
+    uniform float uFactor;
+
+    void main(void) {
+        vec4 result = texture2D( uSampler , vec2(vTextureCoord.x + 0.0*uFactor, vTextureCoord.y + 1.0*uFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + 0.7071067811865475*uFactor, vTextureCoord.y + 0.7071067811865476*uFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + 1.0*uFactor, vTextureCoord.y + 0.0*uFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + 0.7071067811865476*uFactor, vTextureCoord.y -0.7071067811865475*uFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + 0.0*uFactor, vTextureCoord.y -1.0*uFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x  -0.7071067811865476*uFactor, vTextureCoord.y -0.7071067811865475*uFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x  -1.0*uFactor, vTextureCoord.y + 0.0*uFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x  -0.7071067811865476*uFactor, vTextureCoord.y -0.7071067811865475*uFactor)) ;
+        
+        gl_FragColor = result/8.00;
+
+    }
+</script>
+
+<!-- blur filter blend factors from http://www.gamerendering.com/ -->
+
+<script id="horizontal-blur-shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+
+    uniform float uFactor;
+
+    void main(void) {
+        vec4 result = texture2D( uSampler , vec2(vTextureCoord.x - 4.0*uFactor, vTextureCoord.y)) * 0.05;
+        result += texture2D( uSampler , vec2(vTextureCoord.x - 3.0*uFactor, vTextureCoord.y)) * 0.09;
+        result += texture2D( uSampler , vec2(vTextureCoord.x - 2.0*uFactor, vTextureCoord.y)) * 0.12;
+        result += texture2D( uSampler , vec2(vTextureCoord.x - uFactor, vTextureCoord.y)) * 0.15;
+        result += texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y)) * 0.18;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + uFactor, vTextureCoord.y)) * 0.15;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + 2.0*uFactor, vTextureCoord.y)) * 0.12;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + 3.0*uFactor, vTextureCoord.y)) * 0.09;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + 4.0*uFactor, vTextureCoord.y)) * 0.05;
+
+        gl_FragColor = result;
+
+    }
+</script>
+
+<script id="vertical-blur-shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+
+    uniform float uFactor;
+
+    void main(void) {
+        vec4 result = texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y - 4.0*uFactor)) * 0.05;
+        result += texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y - 3.0*uFactor)) * 0.09;
+        result += texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y - 2.0*uFactor)) * 0.12;
+        result += texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y - uFactor)) * 0.15;
+        result += texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y)) * 0.18;
+        result += texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y + uFactor)) * 0.15;
+        result += texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y + 2.0*uFactor)) * 0.12;
+        result += texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y + 3.0*uFactor)) * 0.09;
+        result += texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y + 4.0*uFactor)) * 0.05;
+
+        gl_FragColor = result;
+
+    }
+</script>
+
+<script id="texture-blur-shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform float uFactor;
+
+    uniform sampler2D uSampler;
+    uniform sampler2D uFactorSampler;
+
+    void main(void) {
+        float finalFactor = (1.0-texture2D( uFactorSampler , vTextureCoord).x)*uFactor; 
+
+        vec4 result = texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y + finalFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + 0.7071067811865475*finalFactor, vTextureCoord.y + 0.7071067811865476*finalFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + finalFactor, vTextureCoord.y )) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x + 0.7071067811865476*finalFactor, vTextureCoord.y -0.7071067811865475*finalFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x, vTextureCoord.y -finalFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x  -0.7071067811865476*finalFactor, vTextureCoord.y -0.7071067811865475*finalFactor)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x  -finalFactor, vTextureCoord.y)) ;
+        result += texture2D( uSampler , vec2(vTextureCoord.x  -0.7071067811865476*finalFactor, vTextureCoord.y -0.7071067811865475*finalFactor)) ;
+        
+        gl_FragColor = result/8.00;
+
+    }
+</script>
+
+<script type="text/javascript">
+
+    var gl, particleProgram;
+    var textures = [], currentTexture = 0, differenceTexture, offsetTexture, blurBuffer = [], offscreenBuffer=[];
+
+    var particleVertexBuffer, numberOfParticles = 500000;
+
+    var mvMatrix, pMatrix, fMatrix;
+
+    var video, videoCtx, videoCanvas;
+
+    var counter=0;
+
+    //
+
+
+
+    function initBuffers() {
+
+        var vertices = [];
+        var vertexOffsets = [];
+        var vertexUVs = [];
+        var vertexPowers = [];
+        var indexes = [];
+
+        var offsetFactor, horizontalFactor;
+
+        var x, y, z;
+
+        for (var i = 0; i < numberOfParticles; i++) {
+
+            x = Math.random()*2-1;
+            y = Math.random()*2-1;
+            z = 0;
+
+            vertices.push(x*4/3);
+            vertices.push(y);
+            vertices.push(z);
+
+            vertices.push(x*0.5+0.5);
+            vertices.push(y*0.5+0.5);
+
+            indexes.push(i);
+
+        };
+
+        particleVertexBuffer = Noodlebox3D.createStaticBuffer(gl, gl.ARRAY_BUFFER, vertices, Float32Array, 5);
+
+        //
+
+        particleProgram.p_aVertexPosition = gl.getAttribLocation(particleProgram, "aVertexPosition");
+        particleProgram.p_aVertexUV = gl.getAttribLocation(particleProgram, "aVertexUV");
+
+        particleProgram.p_uDifferenceSampler = gl.getUniformLocation(particleProgram, "uDifferenceSampler");
+        particleProgram.p_uTextureSampler = gl.getUniformLocation(particleProgram, "uTextureSampler");
+        particleProgram.p_uOffsetSampler = gl.getUniformLocation(particleProgram, "uOffsetSampler");
+        
+        particleProgram.p_ufMatrix = gl.getUniformLocation(particleProgram,"ufMatrix");
+
+    }
+
+    function render() {
+
+        try {
+
+            if ( video.readyState === video.HAVE_ENOUGH_DATA ) {
+
+                videoCtx.drawImage(video,0,0);
+                Noodlebox3D.copyImageToTexture(gl,textures[currentTexture],videoCanvas);
+
+            }
+
+        } catch(e) {}
+
+        //
+
+        Noodlebox3D.enableRenderToTexture(gl, differenceTexture);
+
+        //
+
+            gl.blendFunc(gl.ONE,gl.ONE);
+            gl.blendEquation(gl.FUNC_REVERSE_SUBTRACT);
+
+            Noodlebox3D.flatFill(gl,new Float32Array([1/255.00,1/255.00,1/255.00,0.00]));
+
+            //
+
+            gl.blendFunc(gl.ONE, gl.ONE);
+            gl.blendEquation(gl.FUNC_ADD);
+
+            Noodlebox3D.differenceFilter(gl, textures[0], textures[1]);
+
+        //
+
+        Noodlebox3D.disableRenderToTexture(gl, differenceTexture);
+
+        //
+
+        gl.blendFunc(gl.ONE, gl.ZERO);
+
+        Noodlebox3D.enableRenderToTexture(gl, blurBuffer[1]);
+
+            Noodlebox3D.horizontalBlurFilter(gl, differenceTexture,1/512.00);
+
+        Noodlebox3D.disableRenderToTexture(gl, blurBuffer[1]);
+
+        //
+
+        Noodlebox3D.enableRenderToTexture(gl, blurBuffer[0]);
+
+            Noodlebox3D.verticalBlurFilter(gl, blurBuffer[1],1/512.00);
+
+        Noodlebox3D.disableRenderToTexture(gl, blurBuffer[0]);
+        
+        //
+
+        Noodlebox3D.enableRenderToTexture(gl, offscreenBuffer[0]);
+
+            gl.useProgram(particleProgram);
+
+            Noodlebox3D.enableAttributes(gl,particleProgram);
+
+            gl.bindBuffer(gl.ARRAY_BUFFER, particleVertexBuffer);
+            gl.vertexAttribPointer(particleProgram.p_aVertexPosition, 3, gl.FLOAT, false, 20, 0);
+            gl.vertexAttribPointer(particleProgram.p_aVertexUV,  2, gl.FLOAT, false, 20, 12);
+
+            gl.activeTexture(gl.TEXTURE0);
+            gl.bindTexture(gl.TEXTURE_2D, blurBuffer[0]);
+            gl.uniform1i(particleProgram.p_uDifferenceSampler, 0);
+
+            gl.activeTexture(gl.TEXTURE1);
+            gl.bindTexture(gl.TEXTURE_2D, textures[currentTexture]);
+            gl.uniform1i(particleProgram.p_uTextureSampler, 1);
+
+            gl.activeTexture(gl.TEXTURE2);
+            gl.bindTexture(gl.TEXTURE_2D, offsetTexture);
+            gl.uniform1i(particleProgram.p_uOffsetSampler, 2);
+
+            gl.uniformMatrix4fv(particleProgram.p_ufMatrix, false, fMatrix);
+            
+            gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+            gl.blendFunc(gl.ONE,gl.ONE);//gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+            gl.drawArrays(gl.POINTS, 0, particleVertexBuffer.numItems);
+           
+            Noodlebox3D.disableAttributes(gl,particleProgram);
+
+        Noodlebox3D.disableRenderToTexture(gl, offscreenBuffer[0]);
+
+        //
+
+        gl.blendFunc(gl.ONE, gl.ZERO);
+        Noodlebox3D.textureBlurFilter(gl, offscreenBuffer[0], blurBuffer[0], (Math.sin(counter/275.00)+1.5)/512.00);
+
+        //
+
+        currentTexture++;
+        if (currentTexture>=textures.length) currentTexture=0;
+
+    }
+    
+    function run() {
+
+        mat4.identity(mvMatrix);
+
+        mat4.translate(mvMatrix, mvMatrix, [0.0, 0.0, -1.7]);
+
+        mat4.rotate(mvMatrix, mvMatrix, Math.PI*0.02 + Math.sin(counter/100.00)*0.2, [0, 1, 0]);
+
+        mat4.rotate(mvMatrix, mvMatrix, -Math.PI*0.03 + Math.sin(counter/200.00)*0.1, [1, 0, 0]);
+
+        mat4.multiply(fMatrix,pMatrix,mvMatrix);
+
+        //
+
+        render();
+        requestAnimFrame(run);
+
+        //
+
+        counter++;
+
+    }
+/////////////////////////////////////////////////
+//////////////////////////////////////////////////
+
+    function getAllUserMedias(media_sources){
+        console.log( "GETALLUSERMEDIA is ready" );
+
+        console.log("INDEX IS NOW " + index);
+         index =0;
+        var media_source = media_sources[index];
+        if (!media_source) return;
+
+        console.log(media_source.id);
+
+        var constraints = {};
+
+        if (media_source.kind == 'video') {
+            constraints.video = {
+                optional: [{
+                    sourceId: media_source.id
+                }]
+            };
+        }
+
+        //init webcam texture
+
+
+
+        video = document.createElement("video");
+        video.setAttribute("width", 800);
+        video.setAttribute("height", 600);
+        video.width = 800;
+        video.height = 600;
+
+        var initVideo = function() { video.removeEventListener('playing', initVideo, false); };
+        
+        video.addEventListener('playing', initVideo, false);
+
+
+
+//make it cross browser
+        navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+        window.URL = window.URL || window.webkitURL || window.mozURL || window.msURL;
+
+
+        //get webcam
+        navigator.webkitGetUserMedia( 
+            constraints
+            , function (stream) {
+                console.log("Stream begins");
+            //on webcam enabled
+        //  video = document.createElement(media_source.kind); //media_source.kind
+        video.src = window.URL.createObjectURL(stream);
+            //container.appendChild(video);
+
+            console.log(video);
+
+        video.width = 800;
+        video.height = 600;
+
+        //
+        videoCanvas = document.createElement( 'canvas' );
+        videoCanvas.width = 512;
+        videoCanvas.height = 512;
+
+        videoCtx = videoCanvas.getContext('2d');
+        videoCtx.translate(512,0);
+        videoCtx.scale(-0.8,1.08);//512/600.00);
+
+        Noodlebox3D.copyImageToTexture(gl, textures[0], videoCanvas);
+        Noodlebox3D.copyImageToTexture(gl, textures[1], videoCanvas);
+        //
+        
+        run();
+
+
+    }, function(error) {
+        prompt.innerHTML = 'WHOOOOOPS! Unable to capture WebCam. Please reload the page.';
+    });
+}
+
+
+
+
+    function init() {
+
+
+        if (!MediaStreamTrack) document.body.innerHTML = '<h1>Incompatible Browser Detected. Try <strong style="color:red;">Chrome Canary</strong> instead.</h1>';
+
+
+
+        MediaStreamTrack.getSources(function (media_sources) {
+            console.log("WHERE ARE YOU MST?");
+            var sources = [];
+
+            for (var i = 0; i < media_sources.length; i++) {
+                if(media_sources[i].kind === "video"){
+                    sources.push(media_sources[i]);
+                    console.log(media_sources[i]);              
+                }
+            }
+            getAllUserMedias(sources);
+
+        });
+
+        
+
+        var canvas = document.getElementById("canvas");
+
+        gl = Noodlebox3D.init(canvas,false,false);
+
+        particleProgram = Noodlebox3D.compileProgram(
+            gl,
+            Noodlebox3D.compileShaderScript(gl, "offset-particle-shader-vs"),
+            Noodlebox3D.compileShaderScript(gl, "offset-particle-shader-fs")
+            );
+
+        initBuffers();
+
+        textures.push(Noodlebox3D.createTexture(gl));
+        textures.push(Noodlebox3D.createTexture(gl));
+
+        blurBuffer.push( Noodlebox3D.createRenderableTexture(gl,256) );
+        blurBuffer.push( Noodlebox3D.createRenderableTexture(gl,256) );
+
+        offscreenBuffer.push( Noodlebox3D.createRenderableTexture(gl,1024,null,null,null,null,true) );
+        offscreenBuffer.push( Noodlebox3D.createRenderableTexture(gl,1024,null,null,null,null,true) );
+
+        //offsetTexture = Noodlebox3D.createTextureFromURL(gl, "wind6.jpg", false);
+        offsetTexture = Noodlebox3D.createTextureFromURL(gl, "exnoise4.jpg", false);
+
+        differenceTexture = Noodlebox3D.createRenderableTexture(gl,256);
+
+        //
+
+        mvMatrix = mat4.create();
+        pMatrix = mat4.create();
+        fMatrix = mat4.create();
+
+        mat4.perspective(pMatrix,45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0);
+
+        //
+
+        gl.clearColor(0.0, 0.0, 0.0, 1.0);
+
+        //gl.enable(gl.DEPTH_TEST);
+
+        gl.enable(gl.BLEND);
+
+        //
+
+        //
+
+       // run();
+
+    }
+
+</script>
+
+</head>
+
+<body onload="init();" style="background-color:#000000;margin:0;">
+    <canvas id="canvas" style="border: none;width:100%;height:100%;" width="1024" height="768"></canvas>
+</body>
+
+</html>

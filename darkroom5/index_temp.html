@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>Dark Room prototype</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+    <style>
+      body {
+        color: #ffffff;
+        background-color: #000000;
+        margin: 0px;
+        overflow: hidden;
+      }
+      #container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        -webkit-filter: contrast(3);
+      }
+
+#prompt {
+  text-align: center;
+  position: absolute;
+  width: 100%;
+  height: 40px;
+  top: 50%;
+  margin: -20px 0 0 0;
+  font-size: 24px;
+  font-weight:300;
+  color: #fff;
+}
+
+    </style>
+  </head>
+  <body>
+    <div id="container"></div>
+    <div id="prompt"></div>
+
+
+    <script type="text/javascript" src="http://cdnjs.cloudflare.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+
+
+  <script src="build/three.min.js"></script>
+  <!--<script src="js/third-party/threejs/three.js"></script>-->
+  <script src="build/StereoEffect.js"></script>
+  <script src="build/DeviceOrientationControls.js"></script>
+  <script src="build/OrbitControls.js"></script>
+
+  <script src="build/Detector.js"></script>
+
+  <script src="build/loaders/BinaryLoader.js"></script>
+
+  <script src="build/shaders/ConvolutionShader.js"></script>
+  <script src="build/shaders/CopyShader.js"></script>
+  <script src="build/shaders/FilmShader.js"></script>
+  <script src="build/shaders/FocusShader.js"></script>
+
+  <script src="build/postprocessing/EffectComposer.js"></script>
+  <script src="build/postprocessing/MaskPass.js"></script>
+  <script src="build/postprocessing/RenderPass.js"></script>
+  <script src="build/postprocessing/BloomPass.js"></script>
+  <script src="build/postprocessing/ShaderPass.js"></script>
+  <script src="build/postprocessing/FilmPass.js"></script>
+
+    <script src="build/dat.gui.min.js"></script>
+    <script src="build/ImprovedNoise.js"></script>
+
+
+  <script>
+   if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+    var camera, scene, renderer;
+    var thisScene, thisRenderer;
+    var effect, controls;
+    var element, container;
+
+    var clock = new THREE.Clock();
+
+     // var verticalMirror, groundMirror;
+      var sphereGroup, smallSphere;
+
+
+      //##### ------------------- 1 source start ----------------
+
+      var r = 0;
+
+      var mouseX = 0, mouseY = 0;
+
+      var haha = 1000;
+      //##### ------------------- 1 source end ------------------
+
+      //@@@@@ ------------------- @camera part 1 start -------------
+
+      var fov = 70;
+      var canvasWidth = 320 / 2;
+      var canvasHeight = 240 / 2;
+      var vidWidth = 320;
+      var vidHeight = 240;
+      var tiltSpeed = 0.1;
+      var tiltAmount = 0.005;
+      var perlin = new ImprovedNoise();
+      var windowHalfX, windowHalfY;
+
+
+  /////////////////////////
+
+  var video, videoTexture;
+
+  /////////////////////////
+
+  var world3D;
+  var geometry;
+  var vidCanvas;
+  var ctx;
+  var pixels;
+  var noisePosn = 0;
+  var wireMaterial;
+  var meshMaterial;
+
+  var params;
+  var prompt;
+
+
+  var index = 0;
+
+  $( document ).ready(function() {
+    console.log( "READYYYYYYYY!" );
+  });
+
+      //@@@@@ ------------------- @camera part 1 end -------------
+    detectSpecs();
+  //  init();
+    fillScene();
+    animate();
+
+
+      function detectSpecs() {
+
+    console.log( "DetectSpecs is ready" );
+
+    if (!MediaStreamTrack) document.body.innerHTML = '<h1>Incompatible Browser Detected. Try <strong style="color:red;">Chrome Canary</strong> instead.</h1>';
+
+    //init HTML elements
+
+
+
+    /////////////////
+
+    var hasWebgl = (function() {
+   try {
+    return !!window.WebGLRenderingContext && !! document.createElement('canvas').getContext('experimental-webgl');
+  } catch (e) {
+    return false;
+  }
+})();
+
+  var hasGetUserMedia = (function() {
+  return !!(navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia);
+})();
+
+
+  if (!hasGetUserMedia) {
+  prompt.innerHTML = 'This demo requires webcam support (Chrome or Opera).';
+} else if (!hasWebgl) {
+  prompt.innerHTML = 'No WebGL support detected. Please try restarting the browser.';
+} else {
+  //prompt.innerHTML = 'Please allow camera access.';
+
+  init();
+}
+}
+
+
+
+    function init() {
+     
+      console.log( "INIT is ready" );
+
+       //@@@@@ ------------------- @camera part 3 start ------------- 
+
+
+
+      MediaStreamTrack.getSources(function (media_sources) {
+      console.log("WHERE ARE YOU MST?");
+      var sources = [];
+
+      for (var i = 0; i < media_sources.length; i++) {
+        if(media_sources[i].kind === "video"){
+          sources.push(media_sources[i]);
+          console.log(media_sources[i]);          
+        }
+      }
+      getAllUserMedias(sources);
+
+     });
+
+     params = new WCMParams();
+
+    //@@@@@ ------------------- @camera part 3 end -------------
+
+
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2( 0x000104, 0.0000910 ); //0.0000675
+
+      renderer = new THREE.WebGLRenderer( { antialias: true } );
+      renderer.setClearColor( scene.fog.color );
+      renderer.autoClear = false;
+      renderer.sortObjects = false;
+
+      element = renderer.domElement;
+
+      container = document.getElementById('container');
+      container.appendChild(element);
+      prompt = document.querySelector('#prompt');
+
+
+
+      //##### ------------------- 2 source start ----------------   
+        
+        var pastWidth = haha;
+        var length = haha;
+        var color = new THREE.Color( 0.3,0.3,0.3 ); // change color here
+        var pointSize = .1;
+
+        var terrainGeometry = new THREE.Geometry();
+        var numPoints = pastWidth * length;
+
+        var colors = [];
+
+        var k = 0;
+
+        var ambient = new THREE.AmbientLight( 0xffffff );
+        // scene.add( ambient );
+
+
+      //##### ------------------- 2 source end ------------------
+
+
+////##### ------------------- 3 source start ----------------  
+        // terrain
+       var img = new Image();
+        img.src = "testimg1_1000px.jpg";
+        // .onload: called when finish loading image
+        img.onload = function () {
+          var data = getBrightness(img);
+          console.log(data);
+
+          for( var i = 0; i < pastWidth; i+=2) {
+
+            for( var j = 0; j < length; j+=2) {
+
+              var u = i / pastWidth;
+              var v = j / length;
+              var x = u - 0.5;
+              var z = v - 0.5;
+              //HEIGHT !!
+              var y = data[i * pastWidth + j] / (255 * 2) - 0.3;
+              //position of each point
+              var vector = new THREE.Vector3( x, y, z );
+              terrainGeometry.vertices.push( vector );
+
+              colors[ 3 * k ] = color.r;
+              colors[ 3 * k + 1 ] = color.g;
+              colors[ 3 * k + 2 ] = color.b;
+
+              colors[ k ] = ( color.clone().multiplyScalar( 100 ) );
+
+              k++;
+
+            }
+
+          }
+          ////////////////////////////// Draw things/////////////////////////////////
+
+          terrainGeometry.colors = colors;
+          terrainGeometry.computeBoundingBox();
+
+
+          var material = new THREE.PointCloudMaterial( { size: pointSize, vertexColors: THREE.VertexColors } );
+
+          var material2 = new THREE.PointCloudMaterial( { size: pointSize, color: 0xd7d7d7 } );
+
+          var pointcloud = new THREE.PointCloud( terrainGeometry, material2 );
+
+
+          pointcloud.scale.set(90, 100, 100);
+          pointcloud.position.set(30, 28, 0);
+          scene.add(pointcloud);
+          
+          // forget about this big yellow sun
+          // var geometry_ = new THREE.SphereGeometry( 5, 32, 32 );
+          // var material_ = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+          // var sphere = new THREE.Mesh( geometry_, material_ );
+          // scene.add( sphere ); 
+
+        }
+
+
+////##### ------------------- 3 source end ----------------  
+
+
+      var light = new THREE.HemisphereLight(0x777777, 0x000000, 0.6);
+      scene.add(light);
+
+      var texture = THREE.ImageUtils.loadTexture(
+        'textures/patterns/blackmat2.jpg'
+        //'textures/patterns/checker.png'
+      );
+      texture.wrapS = THREE.RepeatWrapping;
+      texture.wrapT = THREE.RepeatWrapping;
+      texture.repeat = new THREE.Vector2(50, 50);
+      texture.anisotropy = renderer.getMaxAnisotropy();
+
+      var material = new THREE.MeshPhongMaterial({
+        color: 0xffffff,
+        specular: 0xffffff,
+        shininess: 20,
+        shading: THREE.FlatShading,
+        map: texture
+      });
+
+      var geometry = new THREE.PlaneGeometry(1000, 1000);
+
+      var mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.x = -Math.PI / 2;
+      scene.add(mesh);
+
+
+
+      // postprocessing
+
+        var renderModel = new THREE.RenderPass( scene, camera );
+        var effectBloom = new THREE.BloomPass( 0.75 );
+        var effectFilm = new THREE.FilmPass( 0.5, 0.5, 1448, false );
+
+        effectFocus = new THREE.ShaderPass( THREE.FocusShader );
+
+        effectFocus.uniforms[ "screenWidth" ].value = window.innerWidth;
+        effectFocus.uniforms[ "screenHeight" ].value = window.innerHeight;
+
+        effectFocus.renderToScreen = true;
+
+        
+      //
+     //   composerEffect();
+
+
+      // camera and view
+      effect = new THREE.StereoEffect(renderer);
+
+      camera = new THREE.PerspectiveCamera(90, 1, 0.001, 700000);
+      camera.position.set(0, 5, 0);
+      camera.target = new THREE.Vector3(0, 0, 0);
+
+      scene.add(camera);
+
+      controls = new THREE.OrbitControls(camera, element);
+      controls.rotateUp(Math.PI / 4);
+      controls.target.set(
+        camera.position.x + 0.1,
+        camera.position.y,
+        camera.position.z
+      );
+      controls.noZoom = false;
+      controls.noPan = true;
+
+      function setOrientationControls(e) {
+        if (!e.alpha) {
+          return;
+        }
+
+        controls = new THREE.DeviceOrientationControls(camera, true);
+        controls.connect();
+        controls.update();
+
+        element.addEventListener('click', fullscreen, false);
+
+        window.removeEventListener('deviceorientation', setOrientationControls, true);
+      }
+      window.addEventListener('deviceorientation', setOrientationControls, true);
+
+
+
+    //handle WebGL context lost
+    renderer.domElement.addEventListener("webglcontextlost", function(event) {
+      prompt.style.display = 'inline';
+     // prompt.innerHTML = 'WebGL Context Lost. Please try reloading the page.';
+      console.log('WebGL Context Lost. Please try reloading the page.');
+    }, false);
+
+   ///////////////////////////// onResize();
+     windowHalfX = window.innerWidth / 2;
+     windowHalfY = window.innerHeight / 2;
+
+      window.addEventListener('resize', resize, false);
+      setTimeout(resize, 1);
+}
+
+
+function composerEffect(){
+         renderer.clear();
+         composer.render( 0.03 );
+}
+////##### ------------------- 4 source start ----------------  
+
+    ////////////////////////////// GET DATA: should be bigger than _______/////////////////////////////////
+      function getBrightness(img) {
+        var canvas = document.createElement( 'canvas' );
+
+        canvas.width = haha;
+        canvas.height = haha;
+        var context = canvas.getContext( '2d' );
+
+        
+        var size = haha * haha, data = new Float32Array( size );
+
+        context.drawImage(img,0,0);
+
+        for ( var i = 0; i < size; i ++ ) {
+          data[i] = 0
+        }
+
+        var imgd = context.getImageData(0, 0, haha, haha);
+        var pix = imgd.data;
+
+        var j=0;
+
+        // image data (r, g, b, a)
+        for (var i = 0, n = pix.length; i < n; i += (4)) {
+          var all = pix[i]+pix[i+1]+pix[i+2]; // r + g + b
+          // r + g + b / 3 > brightness
+          data[j++] = all/3; 
+        }
+        return data;
+      }
+////##### ------------------- 4 source end ---------------- 
+
+
+ //@@@@@ ------------------- @camera part 2 start ------------- 
+ //@@@@@ ------------------- @camera part 2 start -------------
+
+  // params for dat.gui
+
+  function WCMParams() {
+    this.zoom = 0.9;
+    this.mOpac = 0;
+    this.wfOpac = 0.1;
+    this.contrast = 2.3;
+    this.saturation = 0.045;
+    this.invertZ = false;
+    this.zDepth = 200;
+    this.noiseStrength = 53;
+    this.noiseScale = 0.017;
+    this.noiseSpeed = 0.005;
+    //this.doSnapshot = function() {};
+  }
+
+function getZDepths() {
+
+    noisePosn += params.noiseSpeed;
+
+    meshMaterial.opacity = params.mOpac;
+    wireMaterial.opacity = params.wfOpac;
+    container.style.webkitFilter = "contrast(" + params.contrast + ") saturate(" + params.saturation + ")";
+    //saturation = params.saturation;
+
+  /////////////////////////
+  /////////////////////////
+  /////////////////////////
+
+    //draw webcam video pixels to canvas for pixel analysis
+    //double up on last pixel get because there is one more vert than pixels
+    ctx.drawImage(video, 0, 0, canvasWidth + 1, canvasHeight + 1);
+    pixels = ctx.getImageData(0, 0, canvasWidth + 1, canvasHeight + 1).data;
+
+
+  /////////////////////////
+  /////////////////////////
+  /////////////////////////
+
+  for (var i = 0; i < canvasWidth + 1; i++) {
+    for (var j = 0; j < canvasHeight + 1; j++) {
+      var color = new THREE.Color(getColor(i, j));
+      //var saturation = new THREE.Saturation()
+      var brightness = getBrightness(color);
+      var gotoZ = params.zDepth * brightness - params.zDepth / 2;
+
+        //add noise wobble
+        gotoZ += perlin.noise(i * params.noiseScale, j * params.noiseScale, noisePosn) * params.noiseStrength;
+        //invert?
+        if (params.invertZ) gotoZ = -gotoZ;
+        //tween to stablize
+        geometry.vertices[j * (canvasWidth + 1) + i].z += (gotoZ - geometry.vertices[j * (canvasWidth + 1) + i].z) / 5;
+      }
+    }
+    geometry.verticesNeedUpdate = true;
+  }
+/////////////////////////////////////////////////////////////////////
+
+
+function onMouseMove(event) {
+    mouseX = (event.clientX - windowHalfX) / (windowHalfX);
+    //mouseY = (event.clientY - windowHalfY) / (windowHalfY);
+    mouseY = event.clientY - windowHalfY;
+  }
+
+function thisAnimate() {
+
+    video.width = vidWidth;
+    video.height = vidHeight;
+
+    // console.log( "ANIMATE is ready");
+    // console.log(video.width);
+    // console.log( "What is video? -> " + video);
+
+    if (video.readyState === video.HAVE_ENOUGH_DATA) {
+      videoTexture.needsUpdate = true;
+      getZDepths();
+    //  getSaturation;
+    }
+    //stats.update();
+    requestAnimationFrame(thisAnimate);
+
+    world3D.scale = new THREE.Vector3(params.zoom, params.zoom, 1);
+    world3D.rotation.x += ((-348 * tiltAmount) - world3D.rotation.x) * tiltSpeed;
+    world3D.rotation.y += ((mouseX * tiltAmount) - world3D.rotation.y) * tiltSpeed;
+
+    render();
+  }
+
+// function thisRender() {
+//     world3D.scale = new THREE.Vector3(params.zoom, params.zoom, 1);
+//     world3D.rotation.x += ((-348 * tiltAmount) - world3D.rotation.x) * tiltSpeed;
+//     world3D.rotation.y += ((mouseX * tiltAmount) - world3D.rotation.y) * tiltSpeed;
+//   //  console.log(mouseY);
+//     thisRenderer.render(scene, camera);
+//   }
+
+    function onResize() {
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  //  camera.aspect = window.innerWidth / window.innerHeight;
+  //  camera.updateProjectionMatrix();
+    windowHalfX = window.innerWidth / 2;
+    windowHalfY = window.innerHeight / 2;
+  }
+
+// Returns a hexidecimal color for a given pixel in the pixel array.
+
+  function getColor(x, y) {
+    var base = (Math.floor(y) * (canvasWidth + 1) + Math.floor(x)) * 4;
+    var c = {
+      r: pixels[base + 0],
+      g: pixels[base + 1],
+      b: pixels[base + 2],
+      a: pixels[base + 3]
+
+      // var v = 0.2126*r + 0.7152*g + 0.0722*b;
+      // pixels[base + 0] = pixels[base + 1] = pixels[base + 2] = v;
+    };
+    //return (c.r << 16) + (c.g << 8) + c.b;
+
+    return (c.r << 16) + (c.g << 8) + c.b;
+  
+
+  // for (var i=0; i<d.length; i+=4) {
+  //   var r = d[i];
+  //   var g = d[i+1];
+  //   var b = d[i+2];
+  //   // CIE luminance for the RGB
+  //   // The human eye is bad at seeing red and blue, so we de-emphasize them.
+  //   var v = 0.2126*r + 0.7152*g + 0.0722*b;
+  //   d[i] = d[i+1] = d[i+2] = v
+  // }
+  // return pixels;
+
+  }
+
+  //return pixel brightness between 0 and 1 based on human perceptual bias
+
+  function getBrightness(c) {
+    //return (0.34 * c.r + 0.5 * c.g + 0.16 * c.b);
+    return (0.1 * (c.r + c.g + c.b));
+  }
+
+function getAllUserMedias(media_sources){
+    console.log( "GETALLUSERMEDIA is ready" );
+
+    console.log("INDEX IS NOW " + index);
+     index =0;
+    var media_source = media_sources[index];
+    if (!media_source) return;
+
+    console.log(media_source.id);
+
+    var constraints = {};
+
+    if (media_source.kind == 'video') {
+      constraints.video = {
+        optional: [{
+          sourceId: media_source.id
+        }]
+      };
+    }
+
+      //init webcam texture
+      video = document.createElement('video');
+      video.width = 320;
+      video.height = 240;
+  //  video.autoplay = true;
+  //  video.loop = true;
+
+//make it cross browser
+window.URL = window.URL || window.webkitURL;
+navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia || navigator.msGetUserMedia;
+
+
+    //get webcam
+    navigator.webkitGetUserMedia( 
+      constraints
+      , function (stream) {
+        console.log("Stream begins");
+      //on webcam enabled
+    //  video = document.createElement(media_source.kind); //media_source.kind
+    video.src = window.URL.createObjectURL(stream);
+      //container.appendChild(video);
+
+      console.log(video);
+
+      video.width = 320;
+      video.height = 240;
+      video.autoplay = true;
+      video.loop = true;
+
+      prompt.style.display = 'none';
+      container.style.display = 'inline';
+
+      console.log("SETTING VIDEO TEXTURE");
+      videoTexture = new THREE.Texture(video);
+
+      world3D = new THREE.Object3D();
+      thisScene.add(world3D);
+
+    //add mirror plane
+    geometry = new THREE.PlaneGeometry(640/2, 480/2, canvasWidth, canvasHeight);
+    geometry.dynamic = true;
+    meshMaterial = new THREE.MeshBasicMaterial({
+      opacity: 0.5,
+      map: videoTexture
+    });
+    var mirror = new THREE.Mesh(geometry, meshMaterial);
+    world3D.add(mirror);
+    mirror.rotation.y = 90;
+    mirror.position.z = -120;
+
+    //add wireframe plane
+    wireMaterial = new THREE.MeshBasicMaterial({
+      opacity: 0.1,
+      color: 0xffffff,
+      wireframe: true,
+      blending: THREE.AdditiveBlending,
+      transparent: true
+    });
+    var wiremirror = new THREE.Mesh(geometry, wireMaterial);
+    world3D.add(wiremirror);
+    wiremirror.rotation.y = 90;
+    wiremirror.position.z = -120;
+
+
+    // //init renderer
+    // thisRenderer = new THREE.WebGLRenderer({
+    //   antialias: true
+    // });
+    // thisRenderer.sortObjects = false;
+    // thisRenderer.setSize(window.innerWidth, window.innerHeight);
+    // container.appendChild(thisRenderer.domElement);
+
+    // add Stats
+    //stats = new Stats();
+    //document.querySelector('.fps').appendChild(stats.domElement);
+
+
+  /////////////////////////
+  /////////////////////////
+  /////////////////////////
+
+    //init vidCanvas - used to analyze the video pixels
+    vidCanvas = document.createElement('canvas');
+    document.body.appendChild(vidCanvas);
+    vidCanvas.style.position = 'absolute';
+    vidCanvas.style.display = 'none';
+    ctx = vidCanvas.getContext('2d');
+
+  /////////////////////////
+  /////////////////////////
+  /////////////////////////
+
+    //init listeners
+    document.addEventListener('mousemove', onMouseMove, false);
+    window.addEventListener('resize', onResize, false);
+    //document.addEventListener('mousewheel', onWheel, false);
+
+    // //handle WebGL context lost
+    // thisRenderer.domElement.addEventListener("webglcontextlost", function(event) {
+    //   prompt.style.display = 'inline';
+    //  // prompt.innerHTML = 'WebGL Context Lost. Please try reloading the page.';
+    //   console.log('WebGL Context Lost. Please try reloading the page.');
+    // }, false);
+
+    // onResize();
+    thisAnimate();
+
+  }, function(error) {
+   // prompt.innerHTML = 'WHOOOOOPS! Unable to capture WebCam. Please reload the page.';
+
+    console.log('WHOOOOOPS! Unable to capture WebCam. Please reload the page.');
+  });
+}
+
+
+ //@@@@@ ------------------- @camera part 2 end ------------- 
+ //@@@@@ ------------------- @camera part 2 end -------------
+
+
+
+//////////////////////////////////////////////////////////////////////
+    function resize() {
+      var width = container.offsetWidth;
+      var height = container.offsetHeight;
+
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+
+      renderer.setSize(width, height);
+      effect.setSize(width, height);
+    }
+
+    function effectPass(){
+      
+       effect.clear();
+       composer.render( 0.03 );
+    }
+
+//////////////////////////////////////////////////////////////////////
+    function update(dt) {
+      resize();
+      camera.updateProjectionMatrix();
+      controls.update(dt);
+    }
+//////////////////////////////////////////////////////////////////////
+    function render(dt) {
+
+////##### ------------------- 5 source start ----------------  
+      var dist = 100;
+
+   //    camera.position.x = dist*Math.cos(r)/2;
+   //    camera.position.z = dist*Math.sin(r)/2;
+        
+        // camera.position.x += (mouseX - camera.position.x ) * .005;
+        // camera.position.y += (-mouseY - camera.position.y) * .005;
+
+     //   camera.lookAt(scene.position);
+
+       // camera.lookAt(camera.target);
+        r += .005;
+              
+      // renderer.render( scene, camera );
+////##### ------------------- 5 source end ---------------- 
+       // renderer.clear();
+       // composer.render( 0.03 );
+
+       effect.render(scene, camera);
+
+
+    }
+//////////////////////////////////////////////////////////////////////
+    function animate(t) {
+      requestAnimationFrame(animate);
+
+      update(clock.getDelta());
+      render(clock.getDelta());
+    }
+//////////////////////////////////////////////////////////////////////
+    function fullscreen() {
+      if (container.requestFullscreen) {
+        container.requestFullscreen();
+      } else if (container.msRequestFullscreen) {
+        container.msRequestFullscreen();
+      } else if (container.mozRequestFullScreen) {
+        container.mozRequestFullScreen();
+      } else if (container.webkitRequestFullscreen) {
+        container.webkitRequestFullscreen();
+      }
+    }
+
+//////////////////////////////////////////////////////////////////////
+      function fillScene() {
+
+        //var planeGeo = new THREE.PlaneBufferGeometry( 100.1, 100.1 );
+        var planeGeo = new THREE.PlaneBufferGeometry( 100, 100);
+        
+        // MIRORR planes
+        // groundMirror = new THREE.Mirror( renderer, camera, { clipBias: 0.003, textureWidth: WIDTH, textureHeight: HEIGHT, color: 0x777777 } );
+        
+        // var mirrorMesh = new THREE.Mesh( planeGeo, groundMirror.material );
+        // mirrorMesh.add( groundMirror );
+        // mirrorMesh.rotateX( - Math.PI / 2 );
+        // scene.add( mirrorMesh );
+
+        // verticalMirror = new THREE.Mirror( renderer, camera, { clipBias: 0.003, textureWidth: WIDTH, textureHeight: HEIGHT, color:0x889999 } );
+        
+        // var verticalMirrorMesh = new THREE.Mesh( new THREE.PlaneBufferGeometry( 60, 60 ), verticalMirror.material );
+        // verticalMirrorMesh.add( verticalMirror );
+        // verticalMirrorMesh.position.y = 35;
+        // verticalMirrorMesh.position.z = -45;
+        // scene.add( verticalMirrorMesh );
+
+        sphereGroup = new THREE.Object3D();
+        scene.add( sphereGroup );
+
+        var geometry = new THREE.CylinderGeometry( 0.1, 10 * Math.cos( Math.PI / 180 * 30 ), 0.1, 24, 1 );
+        var material = new THREE.MeshPhongMaterial( { color: 0xffffff, emissive: 0x444444 } );
+        var sphereCap = new THREE.Mesh( geometry, material );
+        sphereCap.position.y = -15 * Math.sin( Math.PI / 180 * 30 ) - 0.05;
+        sphereCap.rotateX(-Math.PI);
+        
+        var geometry = new THREE.SphereGeometry( 15, 24, 24, Math.PI / 2, Math.PI * 2, 0, Math.PI / 180 * 120 );
+        var halfSphere = new THREE.Mesh( geometry, material );
+      //  halfSphere.add( sphereCap );
+        halfSphere.rotateX( - Math.PI / 180 * 135 ); 
+        halfSphere.rotateZ( - Math.PI / 180 * 20 ); 
+        halfSphere.position.y = 7.5 + 15 * Math.sin( Math.PI / 180 * 30 );
+        
+        //sphereGroup.add( halfSphere );
+        
+        var geometry = new THREE.IcosahedronGeometry( 2, 0 );
+        var material = new THREE.MeshLambertMaterial( { color: 0xffffff, emissive: 0x333333, shading: THREE.FlatShading } );
+        smallSphere = new THREE.Mesh( geometry, material );
+       // scene.add(smallSphere); 
+        
+        // walls
+        var planeTop = new THREE.Mesh( planeGeo, new THREE.MeshPhongMaterial( { color: 0xffffff } ) );
+        planeTop.position.y = 50;
+        planeTop.rotateX( Math.PI / 2 );
+        scene.add( planeTop );
+
+      var mesh = new THREE.Mesh(geometry, material);
+      mesh.rotation.x = -Math.PI / 2;
+      scene.add(mesh);
+
+        
+        var planeBack = new THREE.Mesh( planeGeo, new THREE.MeshPhongMaterial( { color: 0xffffff } ) );
+        planeBack.position.z = -550;
+        planeBack.position.y = 550;
+        scene.add( planeBack );
+        
+        var planeFront = new THREE.Mesh( planeGeo, new THREE.MeshPhongMaterial( { color: 0x000000 } ) );
+        planeFront.position.z = 550;
+        planeFront.position.y = 550;
+        planeFront.rotateY( Math.PI );
+        scene.add( planeFront );
+        
+        var planeRight = new THREE.Mesh( planeGeo, new THREE.MeshPhongMaterial( { color: 0x000000 } ) );
+        planeRight.position.x = 550;
+        planeRight.position.y = 550;
+        planeRight.rotateY( - Math.PI / 2 );
+        scene.add( planeRight );
+        
+        var planeLeft = new THREE.Mesh( planeGeo, new THREE.MeshPhongMaterial( { color: 0x000000 } ) );
+        planeLeft.position.x = -550;
+        planeLeft.position.y = 550;
+        planeLeft.rotateY( Math.PI / 2 );
+        scene.add( planeLeft );
+
+      // var mesh = new THREE.Mesh(geometry, material);
+      // mesh.rotation.x = -Math.PI / 2;
+      // scene.add(mesh);
+
+        
+        // lights
+        var mainLight = new THREE.PointLight( 0xcccccc, 1.5, 250 );
+        mainLight.position.y = 60;
+    //    scene.add( mainLight );
+
+
+
+        // var greenLight = new THREE.PointLight( 0xcccccc, 1.5, 250  );
+        // greenLight.position.set( 550, 50, 0 );
+        // scene.add( greenLight );
+
+        // var redLight = new THREE.PointLight( 0xcccccc, 0.25, 1000 );
+        // redLight.position.set( - 550, 50, 0 );
+        // scene.add( redLight );
+
+        var blueLight = new THREE.PointLight( 0xcccccc, 0.25, 1000 );
+        blueLight.position.set( 0, 50, 550 );
+      //  scene.add( blueLight );
+
+      }
+  </script>
+
+  </body>
+</html>

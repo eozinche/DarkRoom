@@ -1,0 +1,243 @@
+<html>
+	<head>
+		<title>PointCloud</title>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+		<style>
+			body {
+				color: #ffffff;
+				background-color: #000000;
+				margin: 0px;
+				overflow: hidden;
+			}
+
+			a {
+				color: red;
+			}
+
+		</style>
+	</head>
+
+
+	<body>
+		<div id="container"></div>
+		<script src="build/three.js"></script>
+		<script src="build/Detector.js"></script>
+
+		<script src="build/loaders/BinaryLoader.js"></script>
+
+		<script src="build/shaders/ConvolutionShader.js"></script>
+		<script src="build/shaders/CopyShader.js"></script>
+		<script src="build/shaders/FilmShader.js"></script>
+		<script src="build/shaders/FocusShader.js"></script>
+
+		<script src="build/postprocessing/EffectComposer.js"></script>
+		<script src="build/postprocessing/MaskPass.js"></script>
+		<script src="build/postprocessing/RenderPass.js"></script>
+		<script src="build/postprocessing/BloomPass.js"></script>
+		<script src="build/postprocessing/ShaderPass.js"></script>
+		<script src="build/postprocessing/FilmPass.js"></script>
+
+		<script>
+		    if ( ! Detector.webgl ) Detector.addGetWebGLMessage();
+
+			var container,
+				renderer, scene, camera;
+
+			var r = 0;
+
+			var mouseX = 0, mouseY = 0;
+
+			var haha = 1000;
+			var hoho = 1000;
+
+			init();
+			animate();
+
+			function init(){
+
+
+				container = document.getElementById('container');
+
+				camera = new THREE.PerspectiveCamera( 60, window.innerWidth / window.innerHeight, 1, 10000);
+				camera.position.z = 0;
+				// camera.position.y = 100;
+
+				scene = new THREE.Scene();
+				scene.fog = new THREE.FogExp2( 0x000104, 0.0000910 ); //0.0000675
+
+				renderer = new THREE.WebGLRenderer();
+				renderer.setClearColor( scene.fog.color );
+				renderer.setSize( window.innerWidth, window.innerHeight );
+				renderer.autoClear = false;
+
+				container.appendChild(renderer.domElement);
+
+				
+				var pastWidth = haha;
+				var length = hoho;
+				var color = new THREE.Color( 0.3,0.3,0.3 ); // change color here
+				var pointSize = .2;
+
+				var terrainGeometry = new THREE.Geometry();
+				var numPoints = pastWidth * length;
+
+				var colors = [];
+
+				var k = 0;
+
+				var ambient = new THREE.AmbientLight( 0xb20000 );
+				scene.add( ambient );
+
+				// terrain
+				var img = new Image();
+				img.src = "testimg1_1000px.jpg";
+				// .onload: called when finish loading image
+				img.onload = function () {
+					var data = getBrightness(img);
+					console.log(data);
+
+					for( var i = 0; i < pastWidth; i+=2) {
+
+						for( var j = 0; j < length; j+=2 ) {
+
+							var u = i / pastWidth;
+							var v = j / length;
+							var x = u - 0.5;
+							var z = v - 0.5;
+							//HEIGHT !!
+							var y = data[i * pastWidth + j] / (255 * 3) - 0.3;
+							//position of each point
+							var vector = new THREE.Vector3( x, y, z );
+							terrainGeometry.vertices.push( vector );
+
+							colors[ 3 * k ] = color.r;
+							colors[ 3 * k + 1 ] = color.g;
+							colors[ 3 * k + 2 ] = color.b;
+
+							colors[ k ] = ( color.clone().multiplyScalar( 100 ) );
+
+							k++;
+
+						}
+
+					}
+					////////////////////////////// Draw things/////////////////////////////////
+
+					terrainGeometry.colors = colors;
+					terrainGeometry.computeBoundingBox();
+
+					var material = new THREE.PointCloudMaterial( { size: pointSize, vertexColors: THREE.VertexColors } );
+					var pointcloud = new THREE.PointCloud( terrainGeometry, material );
+
+
+					pointcloud.scale.set(120, 120, 120);
+					pointcloud.position.set(0, 0, 0);
+					scene.add(pointcloud);
+					
+					// forget about this big yellow sun
+					// var geometry_ = new THREE.SphereGeometry( 5, 32, 32 );
+					// var material_ = new THREE.MeshBasicMaterial( {color: 0xffff00} );
+					// var sphere = new THREE.Mesh( geometry_, material_ );
+					// scene.add( sphere );	
+
+				}
+
+				// postprocessing
+
+				var renderModel = new THREE.RenderPass( scene, camera );
+				var effectBloom = new THREE.BloomPass( 0.75 );
+				var effectFilm = new THREE.FilmPass( 0.5, 0.5, 1448, false );
+
+				effectFocus = new THREE.ShaderPass( THREE.FocusShader );
+
+				effectFocus.uniforms[ "screenWidth" ].value = window.innerWidth;
+				effectFocus.uniforms[ "screenHeight" ].value = window.innerHeight;
+
+				effectFocus.renderToScreen = true;
+
+				composer = new THREE.EffectComposer( renderer );
+
+				composer.addPass( renderModel );
+				composer.addPass( effectBloom );
+				composer.addPass( effectFilm );
+				composer.addPass( effectFocus );
+
+
+				document.addEventListener( 'mousemove', onDocumentMouseMove, false );
+
+			}
+
+////////////////////////////// GET DATA: should be bigger than _______/////////////////////////////////
+			function getBrightness(img) {
+				var canvas = document.createElement( 'canvas' );
+
+				canvas.width = haha;
+				canvas.height = hoho;
+				var context = canvas.getContext( '2d' );
+
+				
+				var size = haha * hoho, data = new Float32Array( size );
+
+				context.drawImage(img,0,0);
+
+				for ( var i = 0; i < size; i ++ ) {
+					data[i] = 0
+				}
+
+				var imgd = context.getImageData(0, 0, haha, hoho);
+				var pix = imgd.data;
+
+				var j=0;
+
+				// image data (r, g, b, a)
+				for (var i = 0, n = pix.length; i < n; i += (4)) {
+					var all = pix[i]+pix[i+1]+pix[i+2]; // r + g + b
+					// r + g + b / 3 > brightness
+					data[j++] = all/3; 
+				}
+				return data;
+			}
+
+
+			function onDocumentMouseMove( event ) {
+
+				mouseX = event.clientX - window.innerWidth/2;
+				mouseY = event.clientY - window.innerHeight/2;
+			}
+
+			function animate() {
+
+				requestAnimationFrame( animate );
+
+				render();
+
+			}
+
+			function render() {
+				var dist = 100;
+
+				camera.position.x = dist*Math.cos(r);
+				camera.position.z = dist*Math.sin(r);
+				
+				camera.position.x += (mouseX - camera.position.x ) * .005;
+				camera.position.y += (-mouseY - camera.position.y) * .005;
+
+				camera.lookAt(scene.position);
+
+				
+				r += .002;
+
+			//	renderer.render( scene, camera );
+
+
+				renderer.clear();
+				composer.render( 0.03 );
+				
+
+			}
+
+		</script>
+	</body>
+
+</html>
